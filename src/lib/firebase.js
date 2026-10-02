@@ -1,0 +1,38 @@
+// Firebase initialization (Auth + Firestore only — both work on the free Spark plan
+// without a credit card). Audio files live on Cloudinary, see src/lib/storage.js.
+import { initializeApp, getApps, getApp } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+};
+
+export const isFirebaseConfigured = Boolean(
+  firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId,
+);
+
+let app = null;
+let auth = null;
+let db = null;
+
+if (isFirebaseConfigured) {
+  app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getFirestore(app);
+}
+
+export { app, auth, db };
+
+export function requireFirebase() {
+  if (!isFirebaseConfigured) {
+    throw new Error(
+      "Firebase is not configured. Create a .env file from .env.example and restart the app.",
+    );
+  }
+  return { app, auth, db };
+}

@@ -1,0 +1,30 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAdmin() {
+      return request.auth != null
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /songs/{invitationId}/{fileName} {
+      // Invitation websites play the song URL without signing in.
+      allow read: if true;
+
+      // Only admins may upload/replace: audio only, max 15 MB.
+      allow write: if isAdmin()
+        && request.resource != null
+        && request.resource.contentType.matches('audio/.*')
+        && request.resource.size < 15 * 1024 * 1024;
+
+      allow delete: if isAdmin();
+    }
+
+    // Nothing else in the bucket is writable.
+    match /{allPaths=**} {
+      allow write: if false;
+    }
+  }
+}

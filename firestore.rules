@@ -1,0 +1,51 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && userRole() == 'admin';
+    }
+
+    match /users/{uid} {
+      // A user can read their own document; admins can read any.
+      allow get, list: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+
+      // A new account can only create its own doc, and only with role "user".
+      allow create: if isSignedIn()
+        && request.auth.uid == uid
+        && request.resource.data.role == 'user'
+        && request.resource.data.email == request.auth.token.email;
+
+      // Users may update their own doc but can NEVER change their role.
+      allow update: if isSignedIn()
+        && request.auth.uid == uid
+        && request.resource.data.role == resource.data.role;
+
+      allow delete: if false;
+    }
+
+    match /songs/{songId} {
+      // Invitations need to read the active song.
+      allow read: if true;
+
+      allow create: if isAdmin()
+        && request.resource.data.uploadedBy == request.auth.uid
+        && request.resource.data.invitationId is string
+        && request.resource.data.audioUrl is string
+        && request.resource.data.storagePath is string;
+
+      allow update, delete: if isAdmin();
+    }
+  }
+}
