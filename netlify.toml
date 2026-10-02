@@ -1,3 +1,8 @@
 [build]
-  command = "npm run build"
-  publish = "dist/public"
+  command = "bun run build"
+  publish = "dist"
+
+[build.environment]
+  # vite config ka default Nitro target Cloudflare hai; Netlify ke liye override
+  NITRO_PRESET = "netlify"
+  NODE_VERSION = "22"
