@@ -5,7 +5,7 @@ import InvitationSelector from "../components/InvitationSelector";
 import SongUploader from "../components/SongUploader";
 import CurrentSong from "../components/CurrentSong";
 import { useAuth } from "../hooks/useAuth";
-import { deleteSong, getActiveSong, uploadSong } from "../lib/songs";
+import { deleteSong, getActiveSong, updateSongClip, uploadSong } from "../lib/songs";
 import { friendlyError } from "../lib/errors";
 
 export const Route = createFileRoute("/")({
@@ -46,6 +46,7 @@ function Dashboard() {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [deleting, setDeleting] = useState(false);
+  const [savingClip, setSavingClip] = useState(false);
   const [status, setStatus] = useState(null); // { type: "success" | "error", message }
 
   const loadSong = useCallback(async (id) => {
@@ -69,7 +70,7 @@ function Dashboard() {
     loadSong(invitationId);
   }, [invitationId, loadSong]);
 
-  async function handleUpload(file, reset) {
+  async function handleUpload(file, reset, clip) {
     setUploading(true);
     setProgress(0);
     setStatus(null);
@@ -79,6 +80,8 @@ function Dashboard() {
         file,
         uid: user.uid,
         onProgress: setProgress,
+        startOffset: clip?.startOffset ?? null,
+        endOffset: clip?.endOffset ?? null,
       });
       reset();
       setStatus(
@@ -98,6 +101,23 @@ function Dashboard() {
     } finally {
       setUploading(false);
       setProgress(0);
+    }
+  }
+
+  // Changes which part of the song plays, without uploading again. Returns true on success.
+  async function handleUpdateClip(startOffset, endOffset) {
+    if (!song) return false;
+    setSavingClip(true);
+    setStatus(null);
+    try {
+      setSong(await updateSongClip(song, startOffset, endOffset));
+      setStatus({ type: "success", message: "Clip saved. The invitation will now play only this part." });
+      return true;
+    } catch (error) {
+      setStatus({ type: "error", message: friendlyError(error) });
+      return false;
+    } finally {
+      setSavingClip(false);
     }
   }
 
@@ -157,6 +177,8 @@ function Dashboard() {
             canManage={isAdmin}
             onDelete={handleDelete}
             deleting={deleting}
+            onUpdateClip={handleUpdateClip}
+            savingClip={savingClip}
           />
         )}
 

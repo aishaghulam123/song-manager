@@ -8,11 +8,13 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  updateDoc,
   where,
 } from "firebase/firestore";
 import { requireFirebase } from "./firebase";
 import { getInvitation } from "../config/invitations";
 import { deleteStorageFile, uploadAudioFile } from "./storage";
+import { buildClipUrl } from "./clip";
 
 const SONGS = "songs";
 
@@ -23,7 +25,10 @@ function mapSong(docSnap) {
     invitationId: data.invitationId,
     invitationName: data.invitationName,
     fileName: data.fileName,
-    audioUrl: data.audioUrl,
+    audioUrl: data.audioUrl, // what invitations play (trimmed if a clip was chosen)
+    originalUrl: data.originalUrl || data.audioUrl, // the full song
+    startOffset: data.startOffset ?? null, // seconds, null = from the beginning
+    endOffset: data.endOffset ?? null, // seconds, null = until the end
     storagePath: data.storagePath,
     uploadedBy: data.uploadedBy,
     createdAt: data.createdAt || null,
@@ -80,14 +85,16 @@ export async function deleteSong(song) {
  * Uploads a new song for an invitation. Any previous song is removed only
  * AFTER the new upload and Firestore write succeed.
  */
-export async function uploadSong({ invitationId, file, uid, onProgress }) {
+export async function uploadSong({ invitationId, file, uid, onProgress, startOffset = null, endOffset = null }) {
   const { db } = requireFirebase();
   const invitation = getInvitation(invitationId);
   if (!invitation) throw new Error("Unknown invitation.");
 
   const previous = await getAllSongs(invitationId);
 
-  const { storagePath, audioUrl } = await uploadAudioFile(invitationId, file, onProgress);
+  const { storagePath, audioUrl: originalUrl } = await uploadAudioFile(invitationId, file, onProgress);
+  // Invitations get the trimmed link; the full file stays stored so the clip can be edited later.
+  const audioUrl = buildClipUrl(originalUrl, startOffset, endOffset);
 
   let created;
   try {
@@ -96,6 +103,9 @@ export async function uploadSong({ invitationId, file, uid, onProgress }) {
       invitationName: invitation.name,
       fileName: file.name,
       audioUrl,
+      originalUrl,
+      startOffset,
+      endOffset,
       storagePath,
       uploadedBy: uid,
       createdAt: serverTimestamp(),
@@ -126,9 +136,24 @@ export async function uploadSong({ invitationId, file, uid, onProgress }) {
     invitationName: invitation.name,
     fileName: file.name,
     audioUrl,
+    originalUrl,
+    startOffset,
+    endOffset,
     storagePath,
     uploadedBy: uid,
     cleanupFailed,
     cleanupError,
   };
+}
+
+/**
+ * Changes which part of the song is played, WITHOUT uploading again.
+ * Pass null for "from the beginning" (start) or "until the end" (end).
+ */
+export async function updateSongClip(song, startOffset, endOffset) {
+  const { db } = requireFirebase();
+  const originalUrl = song.originalUrl || song.audioUrl;
+  const audioUrl = buildClipUrl(originalUrl, startOffset, endOffset);
+  await updateDoc(doc(db, SONGS, song.id), { originalUrl, audioUrl, startOffset, endOffset });
+  return { ...song, originalUrl, audioUrl, startOffset, endOffset };
 }

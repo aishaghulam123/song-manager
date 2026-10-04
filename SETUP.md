@@ -98,6 +98,28 @@ Role badalne ka koi UI jaan boojh kar nahi hai, warna koi bhi khud ko admin bana
 
 ---
 
+## Part E — Song ka sirf ek hissa (clip) chalana
+
+Poora gaana upload karein, aur batayein ke kaun sa hissa chalana hai (jaise chorus ka 0:30 se 1:00).
+
+1. Invitation select karein → gaana choose karein.
+2. Neeche **"Play only part of the song"** box aayega. Wahan gaana chalayein, jahan se hissa shuru karna ho wahan
+   pause karke **Set start here** dabayein, aur jahan khatam karna ho wahan **Set end here** dabayein.
+   Ya time khud likh dein (`75` ya `1:15`). Dono khali chhodne par poora gaana chalega.
+3. **▶ Preview clip** se sun lein ke sahi hissa hai.
+4. **Upload Song** dabayein.
+
+Baad mein hissa badalna ho to dobara upload ki zaroorat nahi: **Current Song → Edit clip** → naye times → **Save clip**.
+
+Yeh kaise kaam karta hai: poori file Cloudinary mein rehti hai, aur invitation ko ek aisa link milta hai jo Cloudinary
+ke andar trimming ke saath chalta hai (`so_30,eo_60`). Invitation websites mein koi change nahi chahiye, woh pehle ki
+tarah `audioUrl` hi padhti hain.
+
+Agar clip wala song chalne par error aaye ya poora gaana hi chale, to Cloudinary → Settings → Security mein
+**"Strict transformations"** check karein. Agar woh on hai to link wali trimming block ho jati hai; usay off karein.
+
+---
+
 ## Agar "Firestore mein data nahi aa raha" / role change nahi ho pa raha
 
 | Nishani | Wajah | Hal |
@@ -123,7 +145,9 @@ Role badalne ka koi UI jaan boojh kar nahi hai, warna koi bhi khud ko admin bana
 
 ```
 users/{uid}    -> email, role ("user" | "admin"), createdAt
-songs/{songId} -> invitationId, invitationName, fileName, audioUrl,
+songs/{songId} -> invitationId, invitationName, fileName,
+                  audioUrl (jo invitation chalati hai: trimmed ho sakta hai),
+                  originalUrl (poora gaana), startOffset, endOffset (seconds, null = poora),
                   storagePath (Cloudinary public_id), uploadedBy, createdAt
 ```
 Cloudinary par files `wedding-songs/{invitationId}/...` mein hoti hain.

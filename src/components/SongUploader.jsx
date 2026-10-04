@@ -1,5 +1,7 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AUDIO_EXTENSIONS, MAX_FILE_SIZE_BYTES } from "../config/invitations";
+import { validateClip } from "../lib/clip";
+import ClipEditor from "./ClipEditor";
 
 function validate(file) {
   if (!file) return "Please choose a file.";
@@ -19,26 +21,55 @@ export default function SongUploader({ disabled, hasExistingSong, uploading, pro
   const inputRef = useRef(null);
   const [file, setFile] = useState(null);
   const [error, setError] = useState("");
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [startText, setStartText] = useState("");
+  const [endText, setEndText] = useState("");
+  const [duration, setDuration] = useState(0);
+
+  // Local preview of the chosen file, used to find the start/end of the clip.
+  useEffect(() => {
+    if (!file) {
+      setPreviewUrl("");
+      return undefined;
+    }
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  const clip = validateClip(startText, endText, duration);
+
+  function clearClip() {
+    setStartText("");
+    setEndText("");
+    setDuration(0);
+  }
 
   function handleFileChange(event) {
     const selected = event.target.files?.[0] || null;
     const message = selected ? validate(selected) : "";
     setError(message);
     setFile(message ? null : selected);
+    clearClip();
   }
 
   function handleUpload() {
-    if (uploading || !file) return;
+    if (uploading || !file || clip.error) return;
     if (hasExistingSong) {
       const ok = window.confirm(
         "This invitation already has a song.\n\nReplace it? The old song will be permanently deleted from storage.",
       );
       if (!ok) return;
     }
-    onUpload(file, () => {
-      setFile(null);
-      if (inputRef.current) inputRef.current.value = "";
-    });
+    onUpload(
+      file,
+      () => {
+        setFile(null);
+        clearClip();
+        if (inputRef.current) inputRef.current.value = "";
+      },
+      { startOffset: clip.start, endOffset: clip.end },
+    );
   }
 
   return (
@@ -67,6 +98,19 @@ export default function SongUploader({ disabled, hasExistingSong, uploading, pro
           )}
           {error && <p className="text-sm text-destructive">{error}</p>}
 
+          {file && previewUrl && !uploading && (
+            <ClipEditor
+              src={previewUrl}
+              startText={startText}
+              endText={endText}
+              onStartText={setStartText}
+              onEndText={setEndText}
+              duration={duration}
+              onDuration={setDuration}
+              error={clip.error}
+            />
+          )}
+
           {uploading && (
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground">Uploading... {progress}%</p>
@@ -82,7 +126,7 @@ export default function SongUploader({ disabled, hasExistingSong, uploading, pro
           <button
             type="button"
             onClick={handleUpload}
-            disabled={uploading || !file}
+            disabled={uploading || !file || Boolean(clip.error)}
             className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
           >
             {uploading ? "Uploading..." : hasExistingSong ? "Replace Song" : "Upload Song"}
